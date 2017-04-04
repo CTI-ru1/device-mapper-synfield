@@ -11,3 +11,4 @@ synfield:
   username: username
   password: password
   devices:  a,b,c,d
+log.path: "/var/log/greenmind/synfield/"
