@@ -58,6 +58,7 @@ public class SynfieldPollService {
     private final Synfield synfield = new Synfield();
     private final Set<String> synfieldDevices = new HashSet<>();
     private final SimpleDateFormat dateStringFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+    private final SimpleDateFormat dateString1Format = new SimpleDateFormat("yyyy-MM-dd");
     
     @PostConstruct
     public void init() {
@@ -131,9 +132,9 @@ public class SynfieldPollService {
                         Calendar calNow = Calendar.getInstance();
                         calNow.setTime(now);
                         
-                        final String thenString = calThen.get(Calendar.YEAR) + "-" + (calThen.get(Calendar.MONTH) + 1) + "-" + calThen.get(Calendar.DAY_OF_MONTH);
-                        final String nowString = calNow.get(Calendar.YEAR) + "-" + (calNow.get(Calendar.MONTH) + 1) + "-" + calNow.get(Calendar.DAY_OF_MONTH);
-                        log(mac + "/" + capability, String.format("Searching for data from %s until %s", thenString, thenString));
+                        final String thenString = dateString1Format.format(then);
+                        final String nowString = dateString1Format.format(now);
+                        log(mac + "/" + capability, String.format("Searching for data from %s until %s", thenString, nowString));
                         final SynfieldMeasurementsPage measurementsForGateway = synfield.getMeasurements(mac, thenString, nowString);
                         log(mac + "/" + capability, String.format("Received %d measurements for resource.", measurementsForGateway.getResponse().getMeasurements().size()));
                         
