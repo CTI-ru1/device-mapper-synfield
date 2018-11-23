@@ -1,7 +1,7 @@
 package net.sparkworks.mapper.service;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang.StringUtils;
-import org.apache.log4j.Logger;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.core.MessageProperties;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
@@ -11,13 +11,9 @@ import org.springframework.stereotype.Service;
 
 import java.util.Date;
 
-
+@Slf4j
 @Service
 public class SenderService {
-    /**
-     * LOGGER.
-     */
-    private static final Logger LOGGER = Logger.getLogger(SenderService.class);
     private static final String MESSAGE_TEMPLATE = "%s,%f,%d";
     
     @Value("${rabbitmq.queue.send}")
@@ -32,6 +28,6 @@ public class SenderService {
     }
     
     private void log(String uri, String message) {
-        LOGGER.info(String.format("[%s] %s", StringUtils.rightPad(uri, 50), message));
+        log.info(String.format("[%s] %s", StringUtils.rightPad(uri, 50), message));
     }
 }

@@ -1,6 +1,6 @@
 package net.sparkworks.mapper.configuration;
 
-import net.sparkworks.auth.client.SwAAConfigurationProperties;
+import net.sparkworks.cs.client.config.ClientAuthConfig;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
@@ -13,10 +13,7 @@ import java.util.List;
  */
 @Component
 @ConfigurationProperties(prefix = "sparkworks.aa.oauth2")
-public class SwAAConfiguration implements SwAAConfigurationProperties {
-    
-    @NotNull
-    private String address;
+public class SwAAConfiguration implements ClientAuthConfig {
     
     @NotNull
     private String accessTokenUrl;
@@ -37,16 +34,6 @@ public class SwAAConfiguration implements SwAAConfigurationProperties {
     
     @NotNull
     private String password;
-    
-    
-    @Override
-    public String getAddress() {
-        return address;
-    }
-    
-    public void setAddress(String address) {
-        this.address = address;
-    }
     
     @Override
     public String getAccessTokenUrl() {

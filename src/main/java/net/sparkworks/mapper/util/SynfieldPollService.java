@@ -1,9 +1,11 @@
 package net.sparkworks.mapper.util;
 
 import gr.cti.ru1.synfield.client.Synfield;
-import gr.cti.ru1.synfield.client.model.measurements.SynfieldMeasurement;
-import gr.cti.ru1.synfield.client.model.measurements.SynfieldMeasurementsPage;
-import gr.cti.ru1.synfield.client.model.sensors.SynfieldSensor;
+import gr.cti.ru1.synfield.client.model.v2.Measurement;
+import gr.cti.ru1.synfield.client.model.v2.Measurements;
+import gr.cti.ru1.synfield.client.model.v2.Node;
+import gr.cti.ru1.synfield.client.model.v2.SensingServices;
+import lombok.extern.slf4j.Slf4j;
 import net.sparkworks.cs.client.DataClient;
 import net.sparkworks.cs.client.GatewayClient;
 import net.sparkworks.cs.client.ResourceClient;
@@ -13,7 +15,6 @@ import net.sparkworks.cs.common.dto.LatestDTO;
 import net.sparkworks.cs.common.dto.ResourceDTO;
 import net.sparkworks.mapper.service.SenderService;
 import org.apache.commons.lang.StringUtils;
-import org.apache.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -21,22 +22,19 @@ import org.springframework.stereotype.Service;
 
 import javax.annotation.PostConstruct;
 import java.text.SimpleDateFormat;
+import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 
+@Slf4j
 @Service
 public class SynfieldPollService {
-    /**
-     * LOGGER.
-     */
-    private static final Logger LOGGER = Logger.getLogger(SynfieldPollService.class);
     
     @Value("${synfield.username}")
     private String synfieldUsername;
@@ -58,6 +56,7 @@ public class SynfieldPollService {
     private final Synfield synfield = new Synfield();
     private final Set<String> synfieldDevices = new HashSet<>();
     private final SimpleDateFormat dateStringFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+    private final SimpleDateFormat dateStringFormat1 = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
     private final SimpleDateFormat dateString1Format = new SimpleDateFormat("yyyy-MM-dd");
     
     @PostConstruct
@@ -66,21 +65,21 @@ public class SynfieldPollService {
         for (final String device : synfieldDevicesString.split(",")) {
             synfieldDevices.add(device);
         }
+//        synfieldDevices.add("7635010600007942");
     }
     
-    @Scheduled(fixedDelay = 120000)
+    @Scheduled(fixedDelay = 30000)
     public void sendMeasurement() {
         
         for (final String mac : synfieldDevices) {
-            LOGGER.info("==================================================");
-            LOGGER.info(String.format("Polling weather station with mac: %s", mac));
+            log.info("==================================================");
+            log.info(String.format("Polling weather station with mac: %s", mac));
             try {
-                final List<SynfieldSensor> sensors = synfield.getSensors(mac).getResponse().getSensors();
                 final Map<String, Long> uris = new HashMap<>();
                 final Optional<GatewayListDTO> gw = gatewayClient.listByName("synfield-" + mac);
                 for (final GatewayDTO gatewayDTO : gw.get().getGateways()) {
                     for (final ResourceDTO dto : gatewayDTO.getResources().getResources()) {
-                        if (dto.getUri().contains("System Temperature")) {
+                        if (dto.getUri().contains("System Temperature") || dto.getUri().contains("Solar Radiation Level") || dto.getUri().contains("Soil Moisture") || dto.getUri().contains("Foil Moisture")) {
                             continue;
                         }
                         log(dto.getUri(), "Retrieving latest measurement for resource.");
@@ -91,8 +90,10 @@ public class SynfieldPollService {
                                 uris.put(dto.getUri(), data.get().getLatestTime());
                                 log(dto.getUri(), String.format("Latest measurement for resource at %s.", new Date(uris.get(dto.getUri()))));
                             } catch (Exception e) {
-                                LOGGER.error(e, e);
+                                log.error(e.getLocalizedMessage(), e);
                             }
+                        } else {
+                            log.error("couldnot find the resource : " + dto.getUri() + " latest value");
                         }
                     }
                 }
@@ -113,18 +114,21 @@ public class SynfieldPollService {
                 //                    }
                 //                }
                 
+                final Node node = new Node();
+                node.setSerialNumber(mac);
+                final SensingServices[] services = synfield.getNodeSensingServices(node);
                 for (final String key : uris.keySet()) {
                     final String gateway = key.split("/")[0];
                     final String capability = key.split("/")[1];
-                    if (uris.get(key) == 0) {
-                        //                        final SynfieldMeasurementsPage measurementsForGateway = synfield.getMeasurements(mac);
-                        //                        for (final SynfieldMeasurement synfieldMeasurement : measurementsForGateway.getResponse().getMeasurements()) {
-                        //                            if (synfieldMeasurement.getService().toLowerCase().endsWith(capability.toLowerCase())) {
-                        //                                send(gateway, capability, synfieldMeasurement.getDoubleValue(), dateStringFormat.parseMillis(synfieldMeasurement.getTimestamp()));
-                        //                            }
-                        //
-                        //                        }
-                    } else {
+//                    if (uris.get(key) == 0) {
+//                        final SynfieldMeasurementsPage measurementsForGateway = synfield.getNodeMeasurements(mac);
+//                        for (final SynfieldMeasurement synfieldMeasurement : measurementsForGateway.getResponse().getMeasurements()) {
+//                            if (synfieldMeasurement.getService().toLowerCase().endsWith(capability.toLowerCase())) {
+//                                send(gateway, capability, synfieldMeasurement.getDoubleValue(), dateStringFormat.parseMillis(synfieldMeasurement.getTimestamp()));
+//                            }
+//
+//                        }
+//                    } else {
                         final Date then = new Date(uris.get(key));
                         final Date now = new Date();
                         Calendar calThen = Calendar.getInstance();
@@ -135,43 +139,56 @@ public class SynfieldPollService {
                         final String thenString = dateString1Format.format(then);
                         final String nowString = dateString1Format.format(now);
                         log(mac + "/" + capability, String.format("Searching for data from %s until %s", thenString, nowString));
-                        final SynfieldMeasurementsPage measurementsForGateway = synfield.getMeasurements(mac, thenString, nowString);
-                        log(mac + "/" + capability, String.format("Received %d measurements for resource.", measurementsForGateway.getResponse().getMeasurements().size()));
                         
-                        final TreeSet<SynfieldMeasurement> measurements = new TreeSet<>((o1, o2) -> {
-                            try {
-                                final Date measurementTime1 = dateStringFormat.parse(o1.getTimestamp());
-                                final Date measurementTime2 = dateStringFormat.parse(o2.getTimestamp());
-                                return measurementTime1.after(measurementTime2) ? 1 : -1;
-                            } catch (Exception e) {
-                            }
-                            return 0;
-                        });
-                        
-                        measurements.addAll(measurementsForGateway.getResponse().getMeasurements());
-                        
-                        log(mac + "/" + capability, String.format("Will check %d measurements for resource.", measurements.size()));
-                        
-                        int count = 0;
-                        for (final SynfieldMeasurement synfieldMeasurement : measurements) {
-                            if (synfieldMeasurement.getService().toLowerCase().endsWith(capability.toLowerCase())) {
-                                final Date measurementTime = dateStringFormat.parse(synfieldMeasurement.getTimestamp());
-                                LOGGER.debug(measurementTime + "<<" + then);
-                                if (measurementTime.after(then)) {
-                                    count++;
-                                    send(gateway, capability, synfieldMeasurement.getDoubleValue(), dateStringFormat.parse(synfieldMeasurement.getTimestamp()).getTime());
+                        SensingServices service = findService(capability, services);
+                        if (service != null) {
+                            log.info("service:" + service);
+                            final Measurements nodeMeasurements = synfield.getNodeMeasurements(node, thenString, nowString);
+                            
+                            final TreeSet<Measurement> measurements = new TreeSet<>((o1, o2) -> {
+                                try {
+                                    final Date measurementTime1 = dateStringFormat1.parse(o1.getOntime());
+                                    final Date measurementTime2 = dateStringFormat1.parse(o2.getOntime());
+                                    return measurementTime1.after(measurementTime2) ? 1 : -1;
+                                } catch (Exception e) {
+                                }
+                                return 0;
+                            });
+                            
+                            for (Measurement measurement : nodeMeasurements.getMeasurements()) {
+                                if (service.getId() == measurement.getSensing_service_id()) {
+                                    log.info(measurement.toString());
+                                    measurements.add(measurement);
                                 }
                             }
+                            log(mac + "/" + capability, String.format("Received %d measurements for resource.", measurements.size()));
+                            
+                            log(mac + "/" + capability, String.format("Will check %d measurements for resource.", measurements.size()));
+                            
+                            int count = 0;
+                            for (final Measurement synfieldMeasurement : measurements) {
+                                final Date measurementTime = dateStringFormat1.parse(synfieldMeasurement.getOntime());
+                                log.debug(measurementTime + "<<" + then);
+                                if (measurementTime.after(then)) {
+                                    count++;
+                                    send(gateway, capability, synfieldMeasurement.getValue(), dateStringFormat1.parse(synfieldMeasurement.getOntime()).getTime());
+                                    Thread.sleep(100);
+                                }
+                            }
+                            log(mac + "/" + capability, String.format("Sent a total of %d measurements.", count));
                         }
-                        log(mac + "/" + capability, String.format("Sent a total of %d measurements.", count));
                     }
-                }
+//                }
             } catch (Exception e) {
-                LOGGER.error(e, e);
+                log.error(e.getLocalizedMessage(), e);
             }
         }
         
-        LOGGER.info("DONE!");
+        log.info("DONE!");
+    }
+    
+    private SensingServices findService(final String capability, final SensingServices[] services) {
+        return Arrays.stream(services).filter(service -> capability.equalsIgnoreCase(service.getNameEn())).findFirst().orElse(null);
     }
     
     private void send(String gateway, String capability, double doubleValue, long timestamp) {
@@ -180,6 +197,6 @@ public class SynfieldPollService {
     
     
     private void log(String uri, String message) {
-        LOGGER.info(String.format("[%s] %s", StringUtils.rightPad(uri, 50), message));
+        log.info(String.format("[%s] %s", StringUtils.rightPad(uri, 50), message));
     }
 }
